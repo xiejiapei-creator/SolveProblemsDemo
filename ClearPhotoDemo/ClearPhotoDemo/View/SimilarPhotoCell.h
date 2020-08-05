@@ -17,6 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// 显示Mode的数据
 - (void)bindWithModel:(PhotoInfoItem *)model;
 
+
 @end
 
 NS_ASSUME_NONNULL_END
