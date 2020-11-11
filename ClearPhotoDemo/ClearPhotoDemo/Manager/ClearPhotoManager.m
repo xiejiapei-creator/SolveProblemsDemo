@@ -22,6 +22,8 @@
 // 上一张图片资源和当前图片资源是否是相似图片
 @property (nonatomic, assign) BOOL isLastSame;
 
+@property (nonatomic, strong) NSMutableData *theData;
+
 
 // 相似图片数组
 @property (nonatomic, strong, readwrite) NSMutableArray *similarArray;
@@ -133,7 +135,7 @@
     if (authorizationStatus == PHAuthorizationStatusAuthorized)
     {
         // 如果已经授权, 获取图片
-        [self getAllAsset];
+        [self getClassificationAsset];
     }
     // 如果没决定, 弹出指示框, 让用户选择
     else if (authorizationStatus == PHAuthorizationStatusNotDetermined)
@@ -143,7 +145,7 @@
             if (status == PHAuthorizationStatusAuthorized)
             {
                 // 获取相簿中的PHAsset对象
-                [self getAllAsset];
+                [self getClassificationAsset];
             }
         }];
     }
@@ -162,6 +164,39 @@
     options.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
     PHFetchResult *result = [PHAsset fetchAssetsWithOptions:options];
     self.assetArray = result;
+    
+    // 最初从第一张图片，数组中位置0的图片开始获取
+    [self requestImageWithIndex:0];
+}
+
+// 如果已经授权, 获取相簿中的所有PHAsset对象
+- (void)getClassificationAsset
+{
+    // 获取所有资源的集合，并按资源的创建时间排序，这样就可以通过和上一张图片判断日期来分组了
+    PHFetchOptions *option = [[PHFetchOptions alloc] init];
+    option.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
+    option.predicate = [NSPredicate predicateWithFormat:@"mediaType == %ld", PHAssetMediaTypeImage];
+    
+    // 获取所有智能相册
+    PHFetchResult *smartAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
+    PHFetchResult *streamAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumMyPhotoStream options:nil];
+    PHFetchResult *userAlbums = [PHCollectionList fetchTopLevelUserCollectionsWithOptions:nil];
+    PHFetchResult *syncedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumSyncedAlbum options:nil];
+    PHFetchResult *sharedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumCloudShared options:nil];
+    NSArray *arrAllAlbums = @[smartAlbums, streamAlbums, userAlbums, syncedAlbums, sharedAlbums];
+    
+    NSMutableArray *resultArray = [[NSMutableArray alloc] init];
+    for (PHFetchResult<PHAssetCollection *> *album in arrAllAlbums) {
+        [album enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull collection, NSUInteger idx, BOOL *stop) {
+            // 获取相册内asset result
+            PHFetchResult<PHAsset *> *result = [PHAsset fetchAssetsInAssetCollection:collection options:option];
+            if (!result.count) return;
+            
+            [resultArray addObject:result];
+        }];
+    }
+    
+    self.assetArray = resultArray[1];
     
     // 最初从第一张图片，数组中位置0的图片开始获取
     [self requestImageWithIndex:0];
@@ -198,6 +233,7 @@
     
     PHImageManager *imageManager = [PHImageManager defaultManager];
     __weak typeof(self) weakSelf = self;
+
     // 获取压缩大小后的图片，即缩略图
     [imageManager requestImageForAsset:asset targetSize:CGSizeMake(125, 125) contentMode:PHImageContentModeDefault options:self.imageRequestOptions resultHandler:^(UIImage * _Nullable result, NSDictionary * _Nullable info) {
         
@@ -208,6 +244,7 @@
             [weakSelf dealImageWithIndex:index exactImage:result originImageData:imageData];
         }];
     }];
+
 }
 
 #pragma mark - 加载照片：处理图片
@@ -656,3 +693,6 @@
 
 
 @end
+
+
+
